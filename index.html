@@ -47,6 +47,8 @@ body {
   transition: opacity 1.4s ease, transform 1.4s ease;
 }
 .plate.faded { opacity: 0; transform: translateY(-6px); }
+.plate, .bar { -webkit-user-select: none; user-select: none; }
+.bar a { text-decoration: none; }
 .plate h1 {
   margin: 0; font-family: var(--font-display); font-weight: 700; font-size: clamp(22px, 3.4vw, 36px);
   letter-spacing: -0.01em; line-height: 1.05; text-wrap: balance;
@@ -58,7 +60,7 @@ body {
   display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; max-width: calc(100vw - 32px);
   transition: opacity .6s ease;
 }
-.bar button {
+.bar button, .bar a {
   appearance: none; border: 1px solid var(--line); background: var(--glass); color: var(--fg);
   font: 500 13px/1 var(--font-ui); letter-spacing: 0.02em; padding: 10px 14px; border-radius: 999px;
   backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); cursor: pointer;
@@ -104,6 +106,7 @@ body {
   <p>Ведите курсором или пальцем: вы рисуете светом и играете звуком. Нажатие даёт вспышку. Включите микрофон, и свет станцует под вашу музыку.</p>
 </div>
 <div class="bar" id="bar">
+  <a href="3d.html" title="Объёмная версия: миллион частиц">3D</a>
   <button id="btn-palette" type="button" title="Сменить палитру (P)"><span class="swatch" aria-hidden="true"></span><span id="palette-name">Аврора</span></button>
   <button id="btn-sound" type="button" aria-pressed="true" title="Звук (M)"><span class="dot" aria-hidden="true"></span>звук</button>
   <button id="btn-mic" type="button" aria-pressed="false" title="Реагировать на микрофон"><span class="dot live" aria-hidden="true"></span>микрофон</button>

@@ -1,0 +1,687 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+<title>Жидкий Свет 3D</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&family=Golos+Text:wght@400;500&display=swap">
+<style>
+/* Same chrome as the 2D page: full-bleed canvas, nameplate top-left, glass toolbar bottom-right, fallback card. */
+:root {
+  --bg: #04050b;
+  --fg: #eef0ff;
+  --muted: rgba(238, 240, 255, 0.62);
+  --glass: rgba(10, 12, 24, 0.55);
+  --line: rgba(238, 240, 255, 0.16);
+  --accent: #7ef0ff;
+  --accent-2: #ff6ad5;
+  --card-bg: #0d1020;
+  --card-fg: #eef0ff;
+  --font-display: 'Unbounded', 'Arial Black', 'Segoe UI', sans-serif;
+  --font-ui: 'Golos Text', 'Segoe UI', system-ui, sans-serif;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) { --card-bg: #f6f4ef; --card-fg: #16182a; }
+}
+:root[data-theme="light"] { --card-bg: #f6f4ef; --card-fg: #16182a; }
+html, body { height: 100%; }
+[hidden] { display: none !important; }
+body { margin: 0; overflow: hidden; background: var(--bg); color: var(--fg); font-family: var(--font-ui); -webkit-font-smoothing: antialiased; overscroll-behavior: none; }
+#c { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: crosshair; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
+.plate, .bar { -webkit-user-select: none; user-select: none; }
+.plate { position: fixed; left: max(16px, env(safe-area-inset-left, 0px)); top: calc(env(safe-area-inset-top, 0px) + 18px); max-width: min(88vw, 520px); pointer-events: none; transition: opacity 1.4s ease, transform 1.4s ease; }
+.plate.faded { opacity: 0; transform: translateY(-6px); }
+.plate h1 { margin: 0; font-family: var(--font-display); font-weight: 700; font-size: clamp(22px, 3.4vw, 36px); letter-spacing: -0.01em; line-height: 1.05; text-wrap: balance; text-shadow: 0 0 28px rgba(126, 240, 255, 0.35), 0 0 2px rgba(238, 240, 255, 0.6); }
+.plate p { margin: 10px 0 0; color: var(--muted); font-size: 14px; line-height: 1.45; max-width: 46ch; }
+.bar { position: fixed; right: max(16px, env(safe-area-inset-right, 0px)); bottom: calc(env(safe-area-inset-bottom, 0px) + 16px); display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; max-width: calc(100vw - 32px); transition: opacity .6s ease; }
+.bar button, .bar a {
+  appearance: none; border: 1px solid var(--line); background: var(--glass); color: var(--fg); text-decoration: none;
+  font: 500 13px/1 var(--font-ui); letter-spacing: 0.02em; padding: 10px 14px; border-radius: 999px;
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); cursor: pointer;
+  display: inline-flex; align-items: center; gap: 8px; transition: border-color .2s, background .2s;
+}
+.bar button:hover, .bar a:hover { border-color: rgba(238, 240, 255, 0.4); }
+.bar button:focus-visible, .bar a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.bar .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 10px var(--accent); transition: background .2s, box-shadow .2s; }
+.bar button[aria-pressed="false"] .dot { background: var(--line); box-shadow: none; }
+.bar .dot.live { background: var(--accent-2); box-shadow: 0 0 10px var(--accent-2); animation: pulse 1.2s ease-in-out infinite; }
+.bar button[aria-pressed="false"] .dot.live { animation: none; }
+@keyframes pulse { 50% { transform: scale(1.5); opacity: .7; } }
+.bar .swatch { width: 10px; height: 10px; border-radius: 50%; background: linear-gradient(135deg, var(--accent), var(--accent-2)); }
+.toast { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 76px); transform: translateX(-50%); max-width: calc(100vw - 32px); padding: 10px 16px; border-radius: 12px; background: var(--glass); border: 1px solid var(--line); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); font-size: 14px; color: var(--fg); pointer-events: none; opacity: 0; transition: opacity .3s ease; text-align: center; }
+.toast.show { opacity: 1; }
+.saver .plate { opacity: 0; }
+.saver .bar { opacity: 0; pointer-events: none; }
+.saver.ui-visible .bar { opacity: 1; pointer-events: auto; }
+.saver:not(.ui-visible) #c { cursor: none; }
+.fallback { position: fixed; inset: 0; display: grid; place-items: center; padding: 24px; background: var(--bg); }
+.fallback .card { background: var(--card-bg); color: var(--card-fg); border-radius: 16px; padding: 28px 28px 24px; max-width: 480px; width: 100%; box-shadow: 0 30px 80px rgba(0, 0, 0, 0.45); }
+.fallback h2 { margin: 0 0 10px; font-family: var(--font-display); font-size: 22px; font-weight: 700; text-wrap: balance; }
+.fallback p { margin: 0; line-height: 1.5; font-size: 15px; }
+.fallback code { font-size: 12px; opacity: .7; display: block; margin-top: 14px; word-break: break-word; }
+@media (prefers-reduced-motion: reduce) { .plate, .bar, .toast { transition: none; } .bar .dot.live { animation: none; } }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="plate" id="plate">
+  <h1>Жидкий Свет 3D</h1>
+  <p>Ведите курсором или пальцем: вы размешиваете миллион светящихся частиц. Нажатие даёт взрыв. Правой кнопкой или двумя пальцами вращайте, колесом приближайте.</p>
+</div>
+<div class="bar" id="bar">
+  <a href="index.html" title="Плоская версия">2D</a>
+  <button id="btn-palette" type="button" title="Сменить палитру (P)"><span class="swatch" aria-hidden="true"></span><span id="palette-name">Аврора</span></button>
+  <button id="btn-sound" type="button" aria-pressed="true" title="Звук (M)"><span class="dot" aria-hidden="true"></span>звук</button>
+  <button id="btn-mic" type="button" aria-pressed="false" title="Реагировать на микрофон"><span class="dot live" aria-hidden="true"></span>микрофон</button>
+  <button id="btn-full" type="button" aria-pressed="false" title="Заставка на весь экран (F, выход — Esc)">на весь экран</button>
+  <button id="btn-reset" type="button" title="Сбросить (Space)">сбросить</button>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<div class="fallback" id="fallback" hidden>
+  <div class="card">
+    <h2>Нужен WebGL2</h2>
+    <p>Этот браузер не поддерживает WebGL2 или рендер в float-текстуры. Откройте страницу в актуальном Chrome, Firefox, Edge или Safari.</p>
+    <code id="fallback-detail"></code>
+  </div>
+</div>
+<script id="audio-engine">
+/* Same audio engine as the 2D page (v2): grid-quantised notes, tempo-synced delay, slow-release drone envelope. */
+window.createLiquidAudio = function createLiquidAudio(ctx, opts) {
+  opts = opts || {};
+  const BPM = opts.bpm || 112, GRID = 60 / BPM / 4, DELAY = 60 / BPM * 0.75;
+  const SCALE = [0, 2, 4, 7, 9];
+  const MAX_VOICES = 12;
+  let enabled = opts.enabled !== false;
+  function makeIR(seconds, decay, tone) {
+    const rate = ctx.sampleRate, len = Math.floor(rate * seconds), pre = Math.floor(rate * 0.015), buf = ctx.createBuffer(2, len, rate);
+    for (let ch = 0; ch < 2; ch++) {
+      const d = buf.getChannelData(ch); let lp = 0;
+      for (let i = pre; i < len; i++) { lp += ((Math.random() * 2 - 1) - lp) * tone; const k = (i - pre) / (len - pre); d[i] = lp * Math.pow(1 - k, decay); }
+    }
+    return buf;
+  }
+  function filter(type, freq, q) { const f = ctx.createBiquadFilter(); f.type = type; f.frequency.value = freq; if (q != null) f.Q.value = q; return f; }
+  function gain(v) { const g = ctx.createGain(); g.gain.value = v; return g; }
+  const master = gain(enabled ? 0.8 : 0);
+  const limiter = ctx.createDynamicsCompressor(); limiter.threshold.value = -3; limiter.knee.value = 3; limiter.ratio.value = 20; limiter.attack.value = 0.002; limiter.release.value = 0.12;
+  const glue = ctx.createDynamicsCompressor(); glue.threshold.value = -16; glue.knee.value = 12; glue.ratio.value = 2.5; glue.attack.value = 0.02; glue.release.value = 0.5;
+  const tone = filter('highshelf', 5500); tone.gain.value = -3;
+  tone.connect(glue); glue.connect(limiter); limiter.connect(master); master.connect(ctx.destination);
+  const bus = gain(1), dry = gain(0.8);
+  const revHP = filter('highpass', 140), conv = ctx.createConvolver(), wet = gain(0.42);
+  conv.buffer = makeIR(3.2, 2.8, 0.32);
+  const dHP = filter('highpass', 220), delay = ctx.createDelay(2), dLP = filter('lowpass', 1900), fb = gain(0.4), dmix = gain(0.28);
+  delay.delayTime.value = DELAY;
+  bus.connect(dry); bus.connect(revHP); revHP.connect(conv); conv.connect(wet);
+  bus.connect(dHP); dHP.connect(delay); delay.connect(dLP); dLP.connect(fb); fb.connect(delay); dLP.connect(dmix);
+  dry.connect(tone); wet.connect(tone); dmix.connect(tone);
+  const droneGain = gain(0), dlpf = filter('lowpass', 260, 0.9);
+  for (const det of [-4, 4]) { const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = 65.41; o.detune.value = det; o.connect(dlpf); o.start(); }
+  const sub = ctx.createOscillator(); sub.type = 'sine'; sub.frequency.value = 32.7; sub.connect(dlpf); sub.start();
+  const lfo = ctx.createOscillator(); lfo.frequency.value = 0.07; const lfoG = gain(50); lfo.connect(lfoG); lfoG.connect(dlpf.frequency); lfo.start();
+  dlpf.connect(droneGain); droneGain.connect(dry); const droneRev = gain(0.5); droneGain.connect(droneRev); droneRev.connect(revHP);
+  const voices = []; let lastSlot = -1;
+  function note(xn, yn, speed) {
+    if (!enabled) return false;
+    const t = ctx.currentTime;
+    const slot = Math.ceil((t + 0.005) / GRID);
+    if (slot === lastSlot) return false;
+    lastSlot = slot;
+    const when = slot * GRID;
+    for (let i = voices.length - 1; i >= 0; i--) if (voices[i].end <= t) voices.splice(i, 1);
+    while (voices.length >= MAX_VOICES) { const v = voices.shift(); v.g.gain.cancelScheduledValues(t); v.g.gain.setTargetAtTime(0, t, 0.03); }
+    const deg = Math.max(0, Math.min(9, Math.floor(xn * 10)));
+    const midi = 48 + SCALE[deg % 5] + Math.floor(deg / 5) * 12 + (yn > 0.62 ? 12 : 0);
+    const freq = 440 * Math.pow(2, (midi - 69) / 12);
+    const vel = Math.min(1, 0.35 + speed * 1.2);
+    const peak = 0.17 * vel / Math.sqrt(Math.max(1, voices.length / 3));
+    const end = when + 2.2;
+    const g = ctx.createGain(); g.gain.setValueAtTime(0, when); g.gain.linearRampToValueAtTime(peak, when + 0.008); g.gain.setTargetAtTime(0, when + 0.05, 0.42);
+    const f = filter('lowpass', 600 + 3000 * yn * vel, 1.2); f.frequency.setValueAtTime(600 + 3000 * yn * vel, when); f.frequency.exponentialRampToValueAtTime(300, when + 1.2);
+    const pan = ctx.createStereoPanner(); pan.pan.value = (xn - 0.5) * 1.3;
+    const o1 = ctx.createOscillator(); o1.type = 'triangle'; o1.frequency.value = freq;
+    const o2 = ctx.createOscillator(); o2.type = 'sine'; o2.frequency.value = freq * 2; const o2g = gain(0.3);
+    const o3 = ctx.createOscillator(); o3.type = 'sine'; o3.frequency.value = freq * 3; const o3g = gain(0.08);
+    o1.connect(f); o2.connect(o2g); o2g.connect(f); o3.connect(o3g); o3g.connect(f); f.connect(g); g.connect(pan); pan.connect(bus);
+    o1.start(when); o2.start(when); o3.start(when); o1.stop(end); o2.stop(end); o3.stop(end);
+    voices.push({ g, end });
+    return true;
+  }
+  function burst(xn) {
+    if (!enabled) return;
+    const t = ctx.currentTime;
+    const pan = ctx.createStereoPanner(); pan.pan.value = (xn - 0.5); pan.connect(bus);
+    const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.setValueAtTime(150, t); o.frequency.exponentialRampToValueAtTime(40, t + 0.45);
+    const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.45, t + 0.012); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.8);
+    o.connect(g); g.connect(pan); o.start(t); o.stop(t + 0.85);
+    const c = ctx.createOscillator(); c.type = 'triangle'; c.frequency.value = 1800;
+    const cg = ctx.createGain(); cg.gain.setValueAtTime(0.12, t); cg.gain.exponentialRampToValueAtTime(0.0001, t + 0.03);
+    c.connect(cg); cg.connect(pan); c.start(t); c.stop(t + 0.04);
+  }
+  let env = 0;
+  function update(energy, dt) {
+    dt = dt || 1 / 60;
+    const target = Math.min(1, Math.max(0, energy));
+    const tau = target > env ? 0.12 : 1.4;
+    env += (target - env) * (1 - Math.exp(-dt / tau));
+    const t = ctx.currentTime;
+    droneGain.gain.setTargetAtTime(0.1 * env, t, 0.08);
+    dlpf.frequency.setTargetAtTime(240 + 760 * env, t, 0.12);
+  }
+  function setEnabled(on) { enabled = on; master.gain.setTargetAtTime(on ? 0.8 : 0, ctx.currentTime, 0.05); }
+  return { ctx, note, burst, update, setEnabled, get enabled() { return enabled; }, get voices() { return voices.length; }, grid: GRID, bpm: BPM };
+};
+</script>
+<script>
+(() => {
+'use strict';
+const canvas = document.getElementById('c'), plate = document.getElementById('plate'), bar = document.getElementById('bar');
+const fallback = document.getElementById('fallback'), fallbackDetail = document.getElementById('fallback-detail'), toastEl = document.getElementById('toast');
+function fail(detail) { fallback.hidden = false; canvas.hidden = true; bar.hidden = true; plate.hidden = true; fallbackDetail.textContent = detail || ''; console.error('Жидкий Свет 3D: ' + detail); }
+let toastTimer = 0;
+function toast(msg) { toastEl.textContent = msg; toastEl.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => toastEl.classList.remove('show'), 2800); }
+const isTouch = matchMedia('(pointer: coarse)').matches;
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+const gl = canvas.getContext('webgl2', { alpha: false, depth: false, stencil: false, antialias: false, powerPreference: 'high-performance' });
+if (!gl) { fail('WebGL2 context unavailable'); return; }
+if (!gl.getExtension('EXT_color_buffer_float')) { fail('EXT_color_buffer_float missing'); return; }
+
+// ---------- config ----------
+const config = {
+  P_SIZE: isTouch ? 512 : 1024,          // particles = P_SIZE² (1M on desktop, 262k on phones)
+  FLOW_N: 48, IMP_N: 32,                 // 3D texture sizes: curl-noise flow volume, user impulse volume
+  POINT_SIZE: isTouch ? 9 : 11, GAIN: 0.09, EXPOSURE: 1.6, FLOW_SPEED: 0.55,
+  BLOOM_RES: 256, BLOOM_ITER: isTouch ? 5 : 7, BLOOM_INTENSITY: 0.9, BLOOM_THRESHOLD: 0.55, BLOOM_KNEE: 0.7,
+};
+
+// ---------- shaders ----------
+const HEAD = '#version 300 es\nprecision highp float;\nprecision highp int;\nprecision highp sampler2D;\nprecision highp sampler3D;\n';
+const NOISE = `
+vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+vec4 mod289(vec4 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+vec4 permute(vec4 x) { return mod289(((x * 34.0) + 1.0) * x); }
+vec4 taylorInvSqrt(vec4 r) { return 1.79284291400159 - 0.85373472095314 * r; }
+float snoise(vec3 v) {
+  const vec2 C = vec2(1.0 / 6.0, 1.0 / 3.0); const vec4 D = vec4(0.0, 0.5, 1.0, 2.0);
+  vec3 i = floor(v + dot(v, C.yyy)); vec3 x0 = v - i + dot(i, C.xxx);
+  vec3 g = step(x0.yzx, x0.xyz); vec3 l = 1.0 - g; vec3 i1 = min(g.xyz, l.zxy); vec3 i2 = max(g.xyz, l.zxy);
+  vec3 x1 = x0 - i1 + C.xxx; vec3 x2 = x0 - i2 + C.yyy; vec3 x3 = x0 - D.yyy;
+  i = mod289(i);
+  vec4 p = permute(permute(permute(i.z + vec4(0.0, i1.z, i2.z, 1.0)) + i.y + vec4(0.0, i1.y, i2.y, 1.0)) + i.x + vec4(0.0, i1.x, i2.x, 1.0));
+  float n_ = 0.142857142857; vec3 ns = n_ * D.wyz - D.xzx;
+  vec4 j = p - 49.0 * floor(p * ns.z * ns.z);
+  vec4 x_ = floor(j * ns.z); vec4 y_ = floor(j - 7.0 * x_);
+  vec4 x = x_ * ns.x + ns.yyyy; vec4 y = y_ * ns.x + ns.yyyy; vec4 h = 1.0 - abs(x) - abs(y);
+  vec4 b0 = vec4(x.xy, y.xy); vec4 b1 = vec4(x.zw, y.zw);
+  vec4 s0 = floor(b0) * 2.0 + 1.0; vec4 s1 = floor(b1) * 2.0 + 1.0; vec4 sh = -step(h, vec4(0.0));
+  vec4 a0 = b0.xzyw + s0.xzyw * sh.xxyy; vec4 a1 = b1.xzyw + s1.xzyw * sh.zzww;
+  vec3 p0 = vec3(a0.xy, h.x); vec3 p1 = vec3(a0.zw, h.y); vec3 p2 = vec3(a1.xy, h.z); vec3 p3 = vec3(a1.zw, h.w);
+  vec4 norm = taylorInvSqrt(vec4(dot(p0, p0), dot(p1, p1), dot(p2, p2), dot(p3, p3)));
+  p0 *= norm.x; p1 *= norm.y; p2 *= norm.z; p3 *= norm.w;
+  vec4 m = max(0.6 - vec4(dot(x0, x0), dot(x1, x1), dot(x2, x2), dot(x3, x3)), 0.0); m = m * m;
+  return 42.0 * dot(m * m, vec4(dot(p0, x0), dot(p1, x1), dot(p2, x2), dot(p3, x3)));
+}
+vec3 psi(vec3 q, float t) { return vec3(snoise(q + vec3(0.0, 11.3, 5.7) + t), snoise(q + vec3(7.1, 0.0, 3.3) - t * 0.8), snoise(q + vec3(2.9, 4.4, 0.0) + t * 0.6)); }
+vec3 curlNoise(vec3 p, float t) {
+  const float e = 0.08; vec3 dx = vec3(e, 0.0, 0.0), dy = vec3(0.0, e, 0.0), dz = vec3(0.0, 0.0, e);
+  vec3 px1 = psi(p + dx, t), px0 = psi(p - dx, t), py1 = psi(p + dy, t), py0 = psi(p - dy, t), pz1 = psi(p + dz, t), pz0 = psi(p - dz, t);
+  return vec3((py1.z - py0.z) - (pz1.y - pz0.y), (pz1.x - pz0.x) - (px1.z - px0.z), (px1.y - px0.y) - (py1.x - py0.x)) / (2.0 * e);
+}`;
+const quadVS = HEAD + `layout(location=0) in vec2 aPos; out vec2 vUv; void main(){ vUv = aPos * 0.5 + 0.5; gl_Position = vec4(aPos, 0.0, 1.0); }`;
+const FS = {
+flow: NOISE + `
+in vec2 vUv; uniform float uZ, uTime, uScale, uTurb; out vec4 o;
+void main(){
+  vec3 p = vec3(vUv, uZ) * 2.0 - 1.0;
+  vec3 c = curlNoise(p * uScale, uTime * 0.12) * (0.35 + uTurb);
+  vec3 swirl = cross(vec3(0.0, 1.0, 0.0), p) * 0.12;            // slow galactic rotation
+  float l = length(p); vec3 pull = -p * max(0.0, l - 0.85) * 0.9;   // keeps the cloud together
+  o = vec4(c + swirl + pull, 1.0);
+}`,
+impulse: `
+in vec2 vUv; uniform float uZ, uDecay; uniform int uCount; uniform vec4 uSPos[8]; uniform vec4 uSDir[8]; uniform float uSSwirl[8]; uniform sampler3D uOld; out vec4 o;
+void main(){
+  vec3 p = vec3(vUv, uZ) * 2.0 - 1.0;
+  vec3 v = texture(uOld, vec3(vUv, uZ)).xyz * uDecay;
+  for (int i = 0; i < 8; i++) {
+    if (i >= uCount) break;
+    vec3 d = p - uSPos[i].xyz; float r = uSPos[i].w; float w = exp(-dot(d, d) / (r * r));
+    vec3 dir = uSDir[i].xyz;
+    if (uSDir[i].w > 0.5) v += normalize(d + vec3(1e-4)) * length(dir) * w;                        // radial burst
+    else { float l = length(dir); v += dir * w; if (l > 1e-5) v += cross(dir / l, d) * uSSwirl[i] * l * w; }  // push + vortex
+  }
+  o = vec4(v, 1.0);
+}`,
+sim: `
+in vec2 vUv; uniform sampler2D uPos, uVel; uniform sampler3D uFlow, uImp;
+uniform float uDt, uTime, uInit, uStirActive, uFlowSpeed; uniform vec3 uStir, uStirVel;
+layout(location=0) out vec4 oPos; layout(location=1) out vec4 oVel;
+float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+vec3 hash3(vec2 p){ return vec3(hash(p), hash(p + 19.19), hash(p + 37.7)); }
+vec3 randSphere(vec3 h){ float z = h.x * 2.0 - 1.0; float a = h.y * 6.2831853; float r = sqrt(max(0.0, 1.0 - z * z)); return vec3(r * cos(a), r * sin(a), z) * pow(h.z, 0.33333); }
+void main(){
+  vec4 P = texture(uPos, vUv); vec4 V = texture(uVel, vUv);
+  vec3 pos = P.xyz; float age = P.w; vec3 vel = V.xyz; float life = V.w;
+  vec3 h = hash3(vUv + fract(uTime * 0.731));
+  if (uInit > 0.5 || age > life || life <= 0.0 || length(pos) > 2.5) {
+    life = 3.0 + h.z * 7.0;
+    if (uInit > 0.5) { pos = randSphere(h) * 0.9; age = h.x * life; vel = vec3(0.0); }
+    else if (uStirActive > 0.5 && h.y < 0.9) { pos = uStir + randSphere(hash3(vUv * 3.1 + uTime)) * 0.06; vel = uStirVel * 0.6; age = 0.0; }
+    else { pos = randSphere(hash3(vUv * 7.7 + uTime * 0.37)) * 0.9; vel = vec3(0.0); age = 0.0; }
+  } else {
+    vec3 uvw = pos * 0.5 + 0.5;
+    vec3 f = texture(uFlow, uvw).xyz * uFlowSpeed + texture(uImp, uvw).xyz;
+    vel = mix(vel, f, 1.0 - exp(-uDt / 0.25));
+    pos += vel * uDt; age += uDt;
+  }
+  oPos = vec4(pos, age); oVel = vec4(vel, life);
+}`,
+bloomPrefilter: `in vec2 vUv; uniform sampler2D uTexture; uniform vec3 curve; uniform float threshold; out vec4 o;
+void main(){ vec3 c = texture(uTexture, vUv).rgb; float br = max(c.r, max(c.g, c.b)); float rq = clamp(br - curve.x, 0.0, curve.y); rq = curve.z * rq * rq; c *= max(rq, br - threshold) / max(br, 0.0001); o = vec4(c, 0.0); }`,
+bloomBlur: `in vec2 vUv; uniform sampler2D uTexture; uniform vec2 texelSize; out vec4 o;
+void main(){ vec4 s = texture(uTexture, vUv - vec2(texelSize.x, 0.0)) + texture(uTexture, vUv + vec2(texelSize.x, 0.0)) + texture(uTexture, vUv + vec2(0.0, texelSize.y)) + texture(uTexture, vUv - vec2(0.0, texelSize.y)); o = s * 0.25; }`,
+bloomFinal: `in vec2 vUv; uniform sampler2D uTexture; uniform vec2 texelSize; uniform float intensity; out vec4 o;
+void main(){ vec4 s = texture(uTexture, vUv - vec2(texelSize.x, 0.0)) + texture(uTexture, vUv + vec2(texelSize.x, 0.0)) + texture(uTexture, vUv + vec2(0.0, texelSize.y)) + texture(uTexture, vUv - vec2(0.0, texelSize.y)); o = s * 0.25 * intensity; }`,
+display: `in vec2 vUv; uniform sampler2D uScene, uBloom; uniform float uExposure; out vec4 o;
+vec3 toGamma(vec3 c){ c = max(c, vec3(0.0)); return max(1.055 * pow(c, vec3(0.416666667)) - 0.055, vec3(0.0)); }
+void main(){
+  vec3 c = texture(uScene, vUv).rgb;
+  vec3 b = texture(uBloom, vUv).rgb;
+  c = toGamma(1.0 - exp(-c * uExposure));
+  float noise = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453);
+  c += toGamma(b) * 0.7 + (noise - 0.5) / 255.0;
+  vec2 q = vUv - 0.5; float vig = 1.0 - 0.6 * dot(q, q);
+  c += vec3(0.010, 0.012, 0.028) * vig;
+  o = vec4(c, 1.0);
+}`,
+};
+const pointVS = HEAD + `
+uniform sampler2D uPos, uVel; uniform mat4 uVP; uniform float uSize, uTime, uGain; uniform int uTexW; uniform vec3 uPal;
+out vec3 vColor;
+vec3 hsv(float h, float s, float v){ h = fract(h); vec3 k = vec3(1.0, 2.0 / 3.0, 1.0 / 3.0); vec3 p = abs(fract(vec3(h) + k) * 6.0 - 3.0); return v * mix(vec3(1.0), clamp(p - 1.0, 0.0, 1.0), s); }
+float hash(float n){ return fract(sin(n) * 43758.5453); }
+void main(){
+  int id = gl_VertexID; ivec2 uv = ivec2(id % uTexW, id / uTexW);
+  vec4 P = texelFetch(uPos, uv, 0); vec4 V = texelFetch(uVel, uv, 0);
+  float age = P.w, life = max(V.w, 0.001);
+  float fade = smoothstep(0.0, 0.5, age) * (1.0 - smoothstep(life - 1.2, life, age));
+  float speed = length(V.xyz);
+  // hue varies smoothly through space and time, so neighbours share a colour and additive blending stays vivid
+  float w = 0.5 + 0.5 * sin(dot(P.xyz, vec3(1.7, 1.1, 1.4)) + uTime * 0.25 + speed * 0.8 + hash(float(id) * 0.001) * 0.6);
+  vec3 col = hsv(uPal.x + (uPal.y - uPal.x) * w, uPal.z, 1.0);
+  vec4 clip = uVP * vec4(P.xyz, 1.0);
+  float sz = clamp(uSize / max(clip.w, 0.2), 1.0, 16.0);
+  gl_PointSize = sz;
+  gl_Position = fade > 0.0 ? clip : vec4(2.0, 2.0, 2.0, 1.0);
+  vColor = col * (0.22 + 1.4 * speed) * fade * uGain * 3.0 / (sz * sz);      // constant light per particle at any distance
+}`;
+const pointFS = HEAD + `in vec3 vColor; out vec4 o;
+void main(){ vec2 d = gl_PointCoord * 2.0 - 1.0; float r2 = dot(d, d); if (r2 > 1.0) discard; o = vec4(vColor * exp(-r2 * 3.0) * (1.0 - r2), 1.0); }`;
+
+function compile(type, src, name) {
+  const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(name + ': ' + gl.getShaderInfoLog(s));
+  return s;
+}
+function makeProgram(vs, fs, name) {
+  const p = gl.createProgram(); gl.attachShader(p, vs); gl.attachShader(p, fs); gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(name + ': ' + gl.getProgramInfoLog(p));
+  const u = {}; const n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
+  for (let i = 0; i < n; i++) { const nm = gl.getActiveUniform(p, i).name; u[nm.replace('[0]', '')] = gl.getUniformLocation(p, nm); }
+  return { p, u, use() { gl.useProgram(p); } };
+}
+let P;
+try {
+  const vs = compile(gl.VERTEX_SHADER, quadVS, 'quadVS');
+  P = {};
+  for (const k of Object.keys(FS)) P[k] = makeProgram(vs, compile(gl.FRAGMENT_SHADER, HEAD + FS[k], k), k);
+  P.points = makeProgram(compile(gl.VERTEX_SHADER, pointVS, 'pointVS'), compile(gl.FRAGMENT_SHADER, pointFS, 'pointFS'), 'points');
+} catch (e) { fail('shader error: ' + e.message); return; }
+
+// ---------- geometry ----------
+const vao = gl.createVertexArray(); gl.bindVertexArray(vao);
+const vbo = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+const pointsVao = gl.createVertexArray();   // no attributes: vertices come from gl_VertexID
+gl.bindVertexArray(vao);
+function quad() { gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4); }
+
+// ---------- textures / framebuffers ----------
+function tex2D(w, h, internal, format, type, filter) {
+  const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filter); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filter);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.texImage2D(gl.TEXTURE_2D, 0, internal, w, h, 0, format, type, null);
+  return t;
+}
+function tex3D(n) {
+  const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_3D, t);
+  gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_R, gl.CLAMP_TO_EDGE);
+  gl.texImage3D(gl.TEXTURE_3D, 0, gl.RGBA16F, n, n, n, 0, gl.RGBA, gl.HALF_FLOAT, null);
+  return t;
+}
+function createFBO(w, h) {   // RGBA16F render target
+  const texture = tex2D(w, h, gl.RGBA16F, gl.RGBA, gl.HALF_FLOAT, gl.LINEAR);
+  const fbo = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
+  gl.viewport(0, 0, w, h); gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
+  return { texture, fbo, width: w, height: h, texelSizeX: 1 / w, texelSizeY: 1 / h, attach(id) { gl.activeTexture(gl.TEXTURE0 + id); gl.bindTexture(gl.TEXTURE_2D, texture); return id; } };
+}
+function bind(target) {
+  if (target == null) { gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight); gl.bindFramebuffer(gl.FRAMEBUFFER, null); }
+  else { gl.viewport(0, 0, target.width, target.height); gl.bindFramebuffer(gl.FRAMEBUFFER, target.fbo); }
+}
+function complete(name) { const s = gl.checkFramebufferStatus(gl.FRAMEBUFFER); if (s !== gl.FRAMEBUFFER_COMPLETE) throw new Error(name + ' framebuffer incomplete: 0x' + s.toString(16)); }
+
+// particle state: two (pos, vel) pairs rendered with MRT, ping-pong
+let particles, flowTex, impTex = [], impIndex = 0, scene, bloom, bloomFBOs = [];
+const fbo3D = gl.createFramebuffer();
+function createParticles(n) {
+  const sets = [];
+  for (let i = 0; i < 2; i++) {
+    const pos = tex2D(n, n, gl.RGBA32F, gl.RGBA, gl.FLOAT, gl.NEAREST), vel = tex2D(n, n, gl.RGBA32F, gl.RGBA, gl.FLOAT, gl.NEAREST);
+    const fbo = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, pos, 0);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, gl.TEXTURE_2D, vel, 0);
+    gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1]);
+    complete('particles');
+    sets.push({ pos, vel, fbo, width: n, height: n });
+  }
+  return { n, count: n * n, sets, read: 0 };
+}
+function initFramebuffers() {
+  if (!particles || particles.n !== config.P_SIZE) {
+    if (particles) for (const s of particles.sets) { gl.deleteTexture(s.pos); gl.deleteTexture(s.vel); gl.deleteFramebuffer(s.fbo); }
+    particles = createParticles(config.P_SIZE); needInit = true;
+  }
+  if (!flowTex) { flowTex = tex3D(config.FLOW_N); impTex = [tex3D(config.IMP_N), tex3D(config.IMP_N)]; }
+  const w = gl.drawingBufferWidth, h = gl.drawingBufferHeight;
+  if (scene) { gl.deleteTexture(scene.texture); gl.deleteFramebuffer(scene.fbo); }
+  scene = createFBO(w, h);
+  const aspect = w / h, bw = aspect >= 1 ? Math.round(config.BLOOM_RES * aspect) : config.BLOOM_RES, bh = aspect >= 1 ? config.BLOOM_RES : Math.round(config.BLOOM_RES / aspect);
+  bloom = createFBO(bw, bh); bloomFBOs = [];
+  for (let i = 0; i < config.BLOOM_ITER; i++) { const mw = bw >> (i + 1), mh = bh >> (i + 1); if (mw < 8 || mh < 8) break; bloomFBOs.push(createFBO(mw, mh)); }
+}
+let needInit = true;
+
+// ---------- camera ----------
+const cam = { yaw: 0.6, pitch: 0.28, dist: 3.3, auto: 0.05, manualUntil: 0 };
+const eye = [0, 0, 0], fwd = [0, 0, 0], right = [0, 0, 0], up = [0, 0, 0]; let VP = new Float32Array(16), tanHalf = 0, aspect = 1;
+function updateCamera() {
+  const cp = Math.cos(cam.pitch);
+  eye[0] = cp * Math.sin(cam.yaw) * cam.dist; eye[1] = Math.sin(cam.pitch) * cam.dist; eye[2] = cp * Math.cos(cam.yaw) * cam.dist;
+  const l = Math.hypot(eye[0], eye[1], eye[2]); fwd[0] = -eye[0] / l; fwd[1] = -eye[1] / l; fwd[2] = -eye[2] / l;
+  // right = fwd × worldUp, up = right × fwd
+  right[0] = fwd[1] * 0 - fwd[2] * 1; right[1] = fwd[2] * 0 - fwd[0] * 0; right[2] = fwd[0] * 1 - fwd[1] * 0;
+  const rl = Math.hypot(right[0], right[1], right[2]) || 1; right[0] /= rl; right[1] /= rl; right[2] /= rl;
+  up[0] = right[1] * fwd[2] - right[2] * fwd[1]; up[1] = right[2] * fwd[0] - right[0] * fwd[2]; up[2] = right[0] * fwd[1] - right[1] * fwd[0];
+  aspect = gl.drawingBufferWidth / gl.drawingBufferHeight; const fov = 50 * Math.PI / 180; tanHalf = Math.tan(fov / 2);
+  const near = 0.1, far = 30, f = 1 / tanHalf;
+  // view matrix (column-major), then projection * view
+  const tx = -(right[0] * eye[0] + right[1] * eye[1] + right[2] * eye[2]), ty = -(up[0] * eye[0] + up[1] * eye[1] + up[2] * eye[2]), tz = (fwd[0] * eye[0] + fwd[1] * eye[1] + fwd[2] * eye[2]);
+  const V = [right[0], up[0], -fwd[0], 0, right[1], up[1], -fwd[1], 0, right[2], up[2], -fwd[2], 0, tx, ty, tz, 1];
+  const Pm = [f / aspect, 0, 0, 0, 0, f, 0, 0, 0, 0, (far + near) / (near - far), -1, 0, 0, 2 * far * near / (near - far), 0];
+  for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++) { let s = 0; for (let k = 0; k < 4; k++) s += Pm[k * 4 + r] * V[c * 4 + k]; VP[c * 4 + r] = s; }
+}
+// pointer (clientX/Y) -> world point on the plane through the origin that faces the camera
+function unproject(clientX, clientY) {
+  const nx = (clientX / canvas.clientWidth) * 2 - 1, ny = 1 - (clientY / canvas.clientHeight) * 2;
+  const d = [0, 0, 0]; for (let i = 0; i < 3; i++) d[i] = fwd[i] + right[i] * nx * tanHalf * aspect + up[i] * ny * tanHalf;
+  const t = -(eye[0] * fwd[0] + eye[1] * fwd[1] + eye[2] * fwd[2]) / (d[0] * fwd[0] + d[1] * fwd[1] + d[2] * fwd[2]);
+  return [eye[0] + d[0] * t, eye[1] + d[1] * t, eye[2] + d[2] * t];
+}
+
+// ---------- colour ----------
+const palettes = [
+  { name: 'Аврора', h0: 0.36, h1: 0.78, s: 0.95 }, { name: 'Закат', h0: 0.88, h1: 1.10, s: 1.0 }, { name: 'Океан', h0: 0.50, h1: 0.66, s: 0.9 },
+  { name: 'Спектр', h0: 0.0, h1: 1.0, s: 1.0 }, { name: 'Пламя', h0: 0.0, h1: 0.13, s: 1.0 },
+];
+let paletteIndex = 0;
+
+// ---------- splats (impulses into the 3D velocity volume) ----------
+const splats = [];   // { pos:[x,y,z], dir:[x,y,z], radius, swirl, radial, frames }
+function addSplat(pos, dir, radius, swirl, radial, frames) { splats.push({ pos, dir, radius, swirl, radial, frames: frames || 1 }); }
+const stir = { active: false, pos: [0, 0, 0], vel: [0, 0, 0], lastMove: -1e9 };
+function stirTo(p, dt) {
+  const v = [0, 0, 0];
+  if (stir.active) for (let i = 0; i < 3; i++) v[i] = (p[i] - stir.pos[i]) / Math.max(dt, 1 / 240);
+  const sp = Math.hypot(v[0], v[1], v[2]); const cap = 6; if (sp > cap) for (let i = 0; i < 3; i++) v[i] *= cap / sp;
+  stir.pos = p; stir.vel = v; stir.active = true; stir.lastMove = performance.now();
+  if (sp > 0.01) addSplat(p.slice(), [v[0] * 0.9, v[1] * 0.9, v[2] * 0.9], 0.22, 0.9, false, 1);
+  return Math.min(1, sp / cap);
+}
+function burstAt(p, strength) { addSplat(p.slice(), [strength, 0, 0], 0.4, 0, true, 3); }
+
+// ---------- audio ----------
+let audio = null, soundOn = true, energy = 0;
+function ensureAudio() {
+  if (!audio) { const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return; try { audio = window.createLiquidAudio(new AC(), { enabled: soundOn }); } catch (e) { audio = null; console.warn('audio unavailable', e); } }
+  if (audio && audio.ctx.state === 'suspended') audio.ctx.resume();
+}
+function setSound(on) { soundOn = on; btnSound.setAttribute('aria-pressed', String(on)); if (audio) audio.setEnabled(on); }
+
+// ---------- microphone (visual only) ----------
+const mic = { on: false, stream: null, analyser: null, buf: null, fast: [0, 0, 0, 0], slow: [0, 0, 0, 0], lastBeat: 0, level: 0 };
+async function toggleMic() {
+  if (mic.on) { stopMic(); toast('Микрофон выключен'); return; }
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { toast('Микрофон здесь недоступен'); return; }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }, video: false });
+    ensureAudio();
+    const AC = window.AudioContext || window.webkitAudioContext; const ctx = audio ? audio.ctx : new AC();
+    const an = ctx.createAnalyser(); an.fftSize = 2048; an.smoothingTimeConstant = 0.4; ctx.createMediaStreamSource(stream).connect(an);
+    mic.stream = stream; mic.analyser = an; mic.buf = new Float32Array(an.frequencyBinCount); mic.on = true; mic.fast = [0, 0, 0, 0]; mic.slow = [0, 0, 0, 0];
+    btnMic.setAttribute('aria-pressed', 'true'); interacted(); toast('Слушаю. Включите музыку или говорите');
+  } catch (e) { console.warn('mic', e); toast(e && (e.name === 'NotAllowedError' || e.name === 'SecurityError') ? 'Доступ к микрофону не дали. В этом окне он может быть запрещён: откройте файл отдельно' : 'Микрофон недоступен'); }
+}
+function stopMic() { if (mic.stream) mic.stream.getTracks().forEach(t => t.stop()); mic.stream = null; mic.analyser = null; mic.on = false; mic.level = 0; btnMic.setAttribute('aria-pressed', 'false'); }
+function micFrame(now, dt) {
+  const an = mic.analyser, buf = mic.buf; an.getFloatFrequencyData(buf);
+  const binHz = an.context.sampleRate / an.fftSize;
+  const band = (lo, hi) => { let s = 0, n = 0; for (let i = Math.ceil(lo / binHz), e = Math.min(Math.floor(hi / binHz), buf.length - 1); i <= e; i++) { s += Math.pow(10, buf[i] / 20); n++; } return n ? s / n : 0; };
+  const raw = [band(40, 180), band(180, 2000), band(2000, 9000)]; raw[3] = (raw[0] + raw[1] + raw[2]) / 3;
+  const kf = 1 - Math.exp(-dt / 0.05), ks = 1 - Math.exp(-dt / 2.5);
+  for (let i = 0; i < 4; i++) { mic.fast[i] += (raw[i] - mic.fast[i]) * kf; mic.slow[i] += (raw[i] - mic.slow[i]) * ks; }
+  mic.level = mic.fast[3] > 3e-4 ? Math.min(1, Math.max(0, mic.fast[3] / (mic.slow[3] + 1e-6) - 1) / 2.5) : 0;
+  if (mic.fast[0] > 5e-4 && mic.fast[0] / (mic.slow[0] + 1e-6) > 1.8 && now - mic.lastBeat > 220) {
+    mic.lastBeat = now;
+    burstAt([(Math.random() - 0.5) * 1.2, (Math.random() - 0.5) * 1.0, (Math.random() - 0.5) * 1.2], 1.6 + mic.level * 1.5);
+  }
+}
+
+// ---------- input ----------
+const pointers = new Map();
+let lastInteraction = -1e9, plateFaded = false, orbit = null, pinchDist = 0;
+function interacted() { lastInteraction = performance.now(); if (!plateFaded) { plateFaded = true; setTimeout(() => plate.classList.add('faded'), 1800); } }
+canvas.addEventListener('contextmenu', e => e.preventDefault());
+canvas.addEventListener('pointerdown', e => {
+  const p = { id: e.pointerId, type: e.pointerType, x: e.clientX, y: e.clientY, down: true, button: e.button, travel: 0, sx: e.clientX / canvas.clientWidth, sy: e.clientY / canvas.clientHeight, t: e.timeStamp };
+  pointers.set(e.pointerId, p); try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
+  ensureAudio(); interacted();
+  const touches = [...pointers.values()].filter(q => q.type !== 'mouse' && q.down);
+  if (touches.length === 2) { orbit = { x: (touches[0].x + touches[1].x) / 2, y: (touches[0].y + touches[1].y) / 2 }; pinchDist = Math.hypot(touches[0].x - touches[1].x, touches[0].y - touches[1].y); stir.active = false; return; }
+  if (e.button === 2 || e.ctrlKey || e.shiftKey) { orbit = { x: e.clientX, y: e.clientY }; return; }
+  const w = unproject(e.clientX, e.clientY);
+  stir.pos = w; stir.vel = [0, 0, 0]; stir.active = true; stir.lastMove = performance.now();
+  burstAt(w, 2.6);
+  if (audio) { audio.burst(p.sx); audio.note(p.sx, 1 - p.sy, 0.6); }
+  energy = Math.min(1.5, energy + 0.5);
+});
+canvas.addEventListener('pointermove', e => {
+  let p = pointers.get(e.pointerId);
+  if (!p) { if (e.pointerType !== 'mouse') return; p = { id: e.pointerId, type: 'mouse', x: e.clientX, y: e.clientY, down: false, button: -1, travel: 0, sx: 0, sy: 0, t: e.timeStamp }; pointers.set(e.pointerId, p); return; }
+  const dx = e.clientX - p.x, dy = e.clientY - p.y; const dt = Math.max(1, e.timeStamp - p.t) / 1000;
+  p.x = e.clientX; p.y = e.clientY; p.t = e.timeStamp;
+  const touches = [...pointers.values()].filter(q => q.type !== 'mouse' && q.down);
+  if (orbit && (touches.length === 2 || p.button === 2 || e.ctrlKey || e.shiftKey)) {
+    let cx = e.clientX, cy = e.clientY;
+    if (touches.length === 2) { cx = (touches[0].x + touches[1].x) / 2; cy = (touches[0].y + touches[1].y) / 2; const d = Math.hypot(touches[0].x - touches[1].x, touches[0].y - touches[1].y); if (pinchDist > 0) cam.dist = Math.min(7, Math.max(1.6, cam.dist * pinchDist / d)); pinchDist = d; }
+    cam.yaw -= (cx - orbit.x) * 0.006; cam.pitch = Math.min(1.4, Math.max(-1.4, cam.pitch + (cy - orbit.y) * 0.006));
+    orbit = { x: cx, y: cy }; cam.manualUntil = performance.now() + 4000; interacted(); return;
+  }
+  if (e.pointerType !== 'mouse' && !p.down) return;
+  if (dx === 0 && dy === 0) return;
+  interacted();
+  const w = unproject(e.clientX, e.clientY);
+  const sp = stirTo(w, dt);
+  const sx = e.clientX / canvas.clientWidth, sy = 1 - e.clientY / canvas.clientHeight;
+  const dist = Math.hypot(dx / canvas.clientWidth, dy / canvas.clientHeight); p.travel += dist;
+  energy = Math.min(1.5, energy + dist * 18);
+  if (p.travel > 0.03 && audio && audio.note(sx, sy, Math.min(1, sp * 1.5))) p.travel = 0;
+  if (p.down) ensureAudio();
+});
+function endPointer(e) { const p = pointers.get(e.pointerId); if (!p) return; p.down = false; if (e.pointerType !== 'mouse') pointers.delete(e.pointerId); if ([...pointers.values()].filter(q => q.down).length === 0) orbit = null; }
+canvas.addEventListener('pointerup', endPointer); canvas.addEventListener('pointercancel', endPointer);
+canvas.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse') { pointers.delete(e.pointerId); stir.active = false; } });
+canvas.addEventListener('wheel', e => { e.preventDefault(); cam.dist = Math.min(7, Math.max(1.6, cam.dist * Math.exp(e.deltaY * 0.0012))); cam.manualUntil = performance.now() + 4000; }, { passive: false });
+
+// ---------- autopilot: a comet stirs the cloud along a Lissajous path when nobody does ----------
+let autoT = Math.random() * 100;
+function autopilot(now, dt) {
+  autoT += dt;
+  const p = [0.75 * Math.sin(autoT * 0.31), 0.5 * Math.sin(autoT * 0.47 + 1.3), 0.75 * Math.sin(autoT * 0.23 + 0.7)];
+  stirTo(p, dt);
+}
+
+// ---------- controls ----------
+const btnPalette = document.getElementById('btn-palette'), btnSound = document.getElementById('btn-sound'), btnMic = document.getElementById('btn-mic');
+const btnFull = document.getElementById('btn-full'), btnReset = document.getElementById('btn-reset'), paletteName = document.getElementById('palette-name');
+function nextPalette() { paletteIndex = (paletteIndex + 1) % palettes.length; paletteName.textContent = palettes[paletteIndex].name; }
+function reset() { needInit = true; splats.length = 0; clearImpulse = true; }
+let clearImpulse = false, saver = false, uiTimer = 0;
+function setSaver(on) {
+  saver = on; document.body.classList.toggle('saver', on); document.body.classList.remove('ui-visible');
+  btnFull.setAttribute('aria-pressed', String(on)); btnFull.textContent = on ? 'выйти' : 'на весь экран';
+  const el = document.documentElement;
+  if (on) { if (el.requestFullscreen) el.requestFullscreen().catch(() => {}); toast('Заставка. Esc, чтобы выйти'); }
+  else if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(() => {});
+}
+document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement && saver) setSaver(false); });
+function showUi() { if (!saver) return; document.body.classList.add('ui-visible'); clearTimeout(uiTimer); uiTimer = setTimeout(() => document.body.classList.remove('ui-visible'), 2500); }
+window.addEventListener('pointermove', showUi); window.addEventListener('pointerdown', showUi);
+btnPalette.addEventListener('click', () => { ensureAudio(); nextPalette(); });
+btnSound.addEventListener('click', () => { ensureAudio(); setSound(!soundOn); });
+btnMic.addEventListener('click', toggleMic);
+btnFull.addEventListener('click', () => { ensureAudio(); setSaver(!saver); });
+btnReset.addEventListener('click', reset);
+window.addEventListener('keydown', e => {
+  if (e.code === 'Escape') { if (saver) setSaver(false); return; }
+  if (e.target !== document.body) return;
+  if (e.code === 'Space') { e.preventDefault(); reset(); }
+  else if (e.code === 'KeyP') nextPalette();
+  else if (e.code === 'KeyM') { ensureAudio(); setSound(!soundOn); }
+  else if (e.code === 'KeyF') { ensureAudio(); setSaver(!saver); }
+  else if (e.code === 'ArrowLeft') { cam.yaw -= 0.1; cam.manualUntil = performance.now() + 4000; }
+  else if (e.code === 'ArrowRight') { cam.yaw += 0.1; cam.manualUntil = performance.now() + 4000; }
+  else if (e.code === 'ArrowUp') { cam.pitch = Math.min(1.4, cam.pitch + 0.08); cam.manualUntil = performance.now() + 4000; }
+  else if (e.code === 'ArrowDown') { cam.pitch = Math.max(-1.4, cam.pitch - 0.08); cam.manualUntil = performance.now() + 4000; }
+});
+
+// ---------- frame passes ----------
+function writeFlow(time, turb) {
+  P.flow.use(); gl.uniform1f(P.flow.u.uTime, time); gl.uniform1f(P.flow.u.uScale, 1.6); gl.uniform1f(P.flow.u.uTurb, turb);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fbo3D); gl.viewport(0, 0, config.FLOW_N, config.FLOW_N);
+  for (let z = 0; z < config.FLOW_N; z++) { gl.framebufferTextureLayer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, flowTex, 0, z); if (z === 0) complete('flow'); gl.uniform1f(P.flow.u.uZ, (z + 0.5) / config.FLOW_N); quad(); }
+}
+const sPos = new Float32Array(32), sDir = new Float32Array(32), sSwirl = new Float32Array(8);
+function writeImpulse(dt) {
+  const src = impTex[impIndex], dst = impTex[1 - impIndex]; impIndex = 1 - impIndex;
+  const n = Math.min(8, splats.length);
+  for (let i = 0; i < n; i++) { const s = splats[i]; sPos.set([s.pos[0], s.pos[1], s.pos[2], s.radius], i * 4); sDir.set([s.dir[0], s.dir[1], s.dir[2], s.radial ? 1 : 0], i * 4); sSwirl[i] = s.swirl; }
+  P.impulse.use(); gl.uniform1f(P.impulse.u.uDecay, clearImpulse ? 0 : Math.exp(-dt / 0.35)); gl.uniform1i(P.impulse.u.uCount, n);
+  gl.uniform4fv(P.impulse.u.uSPos, sPos); gl.uniform4fv(P.impulse.u.uSDir, sDir); gl.uniform1fv(P.impulse.u.uSSwirl, sSwirl);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_3D, src); gl.uniform1i(P.impulse.u.uOld, 0);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fbo3D); gl.viewport(0, 0, config.IMP_N, config.IMP_N);
+  for (let z = 0; z < config.IMP_N; z++) { gl.framebufferTextureLayer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, dst, 0, z); gl.uniform1f(P.impulse.u.uZ, (z + 0.5) / config.IMP_N); quad(); }
+  clearImpulse = false;
+  for (let i = splats.length - 1; i >= 0; i--) if (--splats[i].frames <= 0) splats.splice(i, 1);
+  return dst;
+}
+function simulate(dt, time, impCur) {
+  const r = particles.sets[particles.read], w = particles.sets[1 - particles.read];
+  P.sim.use();
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, r.pos); gl.uniform1i(P.sim.u.uPos, 0);
+  gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, r.vel); gl.uniform1i(P.sim.u.uVel, 1);
+  gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_3D, flowTex); gl.uniform1i(P.sim.u.uFlow, 2);
+  gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_3D, impCur); gl.uniform1i(P.sim.u.uImp, 3);
+  gl.uniform1f(P.sim.u.uDt, dt); gl.uniform1f(P.sim.u.uTime, time); gl.uniform1f(P.sim.u.uInit, needInit ? 1 : 0); gl.uniform1f(P.sim.u.uFlowSpeed, config.FLOW_SPEED);
+  const active = stir.active && performance.now() - stir.lastMove < 150;
+  gl.uniform1f(P.sim.u.uStirActive, active ? 1 : 0); gl.uniform3fv(P.sim.u.uStir, stir.pos); gl.uniform3fv(P.sim.u.uStirVel, stir.vel);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, w.fbo); gl.viewport(0, 0, particles.n, particles.n); quad();
+  particles.read = 1 - particles.read; needInit = false;
+}
+function drawPoints(time) {
+  const r = particles.sets[particles.read];
+  bind(scene); gl.clearColor(0, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT);
+  gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
+  P.points.use();
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, r.pos); gl.uniform1i(P.points.u.uPos, 0);
+  gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, r.vel); gl.uniform1i(P.points.u.uVel, 1);
+  gl.uniformMatrix4fv(P.points.u.uVP, false, VP); gl.uniform1i(P.points.u.uTexW, particles.n); gl.uniform1f(P.points.u.uTime, time);
+  const dpr = canvas.width / canvas.clientWidth; gl.uniform1f(P.points.u.uSize, config.POINT_SIZE * dpr * (canvas.clientHeight / 700));
+  gl.uniform1f(P.points.u.uGain, config.GAIN * (1048576 / particles.count) * Math.pow(canvas.clientHeight / 700, 2));   // same total light whatever the particle count or window
+  const pal = palettes[paletteIndex]; gl.uniform3f(P.points.u.uPal, pal.h0, pal.h1, pal.s);
+  gl.bindVertexArray(pointsVao); gl.drawArrays(gl.POINTS, 0, particles.count); gl.bindVertexArray(vao);
+  gl.disable(gl.BLEND);
+}
+function applyBloom(source, dest) {
+  if (bloomFBOs.length < 2) return;
+  let last = dest; gl.disable(gl.BLEND);
+  P.bloomPrefilter.use();
+  const knee = config.BLOOM_THRESHOLD * config.BLOOM_KNEE + 0.0001;
+  gl.uniform3f(P.bloomPrefilter.u.curve, config.BLOOM_THRESHOLD - knee, knee * 2, 0.25 / knee);
+  gl.uniform1f(P.bloomPrefilter.u.threshold, config.BLOOM_THRESHOLD); gl.uniform1i(P.bloomPrefilter.u.uTexture, source.attach(0)); bind(last); quad();
+  P.bloomBlur.use();
+  for (let i = 0; i < bloomFBOs.length; i++) { const d = bloomFBOs[i]; gl.uniform2f(P.bloomBlur.u.texelSize, last.texelSizeX, last.texelSizeY); gl.uniform1i(P.bloomBlur.u.uTexture, last.attach(0)); bind(d); quad(); last = d; }
+  gl.blendFunc(gl.ONE, gl.ONE); gl.enable(gl.BLEND);
+  for (let i = bloomFBOs.length - 2; i >= 0; i--) { const d = bloomFBOs[i]; gl.uniform2f(P.bloomBlur.u.texelSize, last.texelSizeX, last.texelSizeY); gl.uniform1i(P.bloomBlur.u.uTexture, last.attach(0)); bind(d); quad(); last = d; }
+  gl.disable(gl.BLEND);
+  P.bloomFinal.use(); gl.uniform2f(P.bloomFinal.u.texelSize, last.texelSizeX, last.texelSizeY); gl.uniform1i(P.bloomFinal.u.uTexture, last.attach(0)); gl.uniform1f(P.bloomFinal.u.intensity, config.BLOOM_INTENSITY); bind(dest); quad();
+}
+function display() {
+  P.display.use(); gl.uniform1i(P.display.u.uScene, scene.attach(0)); gl.uniform1i(P.display.u.uBloom, bloom.attach(1)); gl.uniform1f(P.display.u.uExposure, config.EXPOSURE);
+  bind(null); quad();
+}
+
+// ---------- loop ----------
+function resizeCanvas() {
+  const dpr = Math.min(window.devicePixelRatio || 1, isTouch ? 2 : 1.5);
+  const w = Math.max(1, Math.floor(canvas.clientWidth * dpr)), h = Math.max(1, Math.floor(canvas.clientHeight * dpr));
+  if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; return true; }
+  return false;
+}
+try { resizeCanvas(); initFramebuffers(); } catch (e) { fail(e.message); return; }
+let lastTime = performance.now(), frames = 0, slowFrames = 0, tuned = false, simTime = 0;
+function frame(now) {
+  const real = Math.min(0.1, Math.max(0.001, (now - lastTime) / 1000)); lastTime = now;
+  if (real > 0.034) slowFrames++; frames++;
+  const dt = Math.min(Math.max(real, 1 / 120), 1 / 30); simTime += dt;
+  if (!tuned && frames > 120) { tuned = true; if (slowFrames > 40 && config.P_SIZE > 512) { config.P_SIZE = 512; config.BLOOM_ITER = 5; config.POINT_SIZE += 2; initFramebuffers(); toast('Снизил детализацию для плавности'); } }
+  if (resizeCanvas()) initFramebuffers();
+  if (now > cam.manualUntil) cam.yaw += cam.auto * real;
+  updateCamera();
+  if (mic.on && mic.analyser) micFrame(now, real);
+  const idle = now - lastInteraction > 6000;
+  if (!reduceMotion && (saver || idle)) autopilot(now, real);
+  energy *= 0.975;
+  writeFlow(simTime, mic.level * 1.2);
+  const impCur = writeImpulse(dt);
+  simulate(dt, simTime, impCur);
+  drawPoints(simTime);
+  applyBloom(scene, bloom);
+  display();
+  if (audio) audio.update(energy, real);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+window.__liquidLight3D = { get audioState() { return audio ? audio.ctx.state : 'none'; }, get particles() { return particles.count; }, get frames() { return frames; }, get slowFrames() { return slowFrames; }, get mic() { return mic.on; }, get saver() { return saver; }, get splats() { return splats.length; }, cam };
+})();
+</script>
+</body>
+</html>
